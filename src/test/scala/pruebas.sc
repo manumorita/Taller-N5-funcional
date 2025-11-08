@@ -77,10 +77,11 @@ medianasFinalPar.foreach(println)
 
 println("\n===== PRUEBA 6: Benchmarks y Visualización =====")
 val tiempos = tiemposKmedianas(puntos16_3, 3, eta)
-println(s"Tiempos (Seq, Par, Aceleración): $tiempos")
+println(s"Tiempos (ms) -> Seq: ${tiempos._1}  Par: ${tiempos._2}  Aceleración: ${tiempos._3}")
 
-// Genera los gráficos HTML (requiere Plotly)
 println("\nGenerando visualización de clusters...")
-probarKmedianas(puntos16_3, 3, eta)
+// si el worksheet se cuelga al graficar, comenta esta línea y ejecútala luego en `sbt run`
+graficarKmedianas(puntos16_3, 3, eta)
 
 println("\n===== FIN DE LAS PRUEBAS =====")
+

@@ -62,13 +62,11 @@ package object kmedianas2D {
     medianasViejas.map(m => calculePromedioSeq(m, clasif.getOrElse(m, Seq.empty)))
   }
 
-  @tailrec
   def hayConvergenciaSeq(
                           eta: Double,
                           medianasViejas: Seq[Punto],
                           medianasNuevas: Seq[Punto]
                         ): Boolean = {
-    // Iterativo (tail-rec) sobre el índice
     @tailrec
     def loop(i: Int): Boolean =
       if (i >= medianasViejas.length) true
@@ -78,6 +76,7 @@ package object kmedianas2D {
       }
     loop(0)
   }
+
 
   @tailrec
   final def kMedianasSeq(puntos: Seq[Punto], medianas: Seq[Punto], eta: Double): Seq[Punto] = {
@@ -114,7 +113,7 @@ package object kmedianas2D {
    *       preservando el orden en la actualización y evaluando convergencia en paralelo.
    */
 
-  private def umbral(n: Int): Int =
+  def umbral(n: Int): Int =
     math.max(1024, n / 8)   // <- heurística conservadora
 
   private def mergeClasifs(a: Map[Punto, Seq[Punto]], b: Map[Punto, Seq[Punto]]): Map[Punto, Seq[Punto]] = {
