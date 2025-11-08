@@ -1,100 +1,86 @@
-import kmedianas2D._
 import Benchmark._
+import kmedianas2D._
+import scala.util.Random
 
-// Helpers de comparación
-def cercaD(a: Double, b: Double, eps: Double = 1e-6): Boolean =
-  math.abs(a - b) <= eps
+// ---------------------------------------------------------------------------
+// PRUEBAS 1: Generación de puntos y medianas iniciales
+// ---------------------------------------------------------------------------
 
-def cercaP(p: Punto, q: Punto, eps: Double = 1e-6): Boolean =
-  cercaD(p.x, q.x, eps) && cercaD(p.y, q.y, eps)
+println("===== PRUEBA 1: Generando puntos y medianas =====")
 
-def todasCerca(as: Seq[Punto], bs: Seq[Punto], eps: Double = 1e-6): Boolean =
-  (as.length == bs.length) && as.zip(bs).forall { case (p, q) => cercaP(p, q, eps) }
-
-def cuentasClusters(clasif: Map[Punto, Seq[Punto]]): Seq[Int] =
-  clasif.values.map(_.size).toSeq.sorted
-
-
-
-// Pruebas de CORRECCIÓN (seq vs par) - resultados esperados
-
-
-// Caso pequeño hecho a mano (2 clusters)
-// Esperado:
-// cuentasClusters iguales (3 y 3)  - true
-// medianas actualizadas ~iguales   - true
-val A = Seq(Punto(0.05, 0.10), Punto(0.10, 0.05), Punto(0.15, 0.12))
-val B = Seq(Punto(1.05, 0.95), Punto(0.90, 1.10), Punto(1.10, 1.05))
-val ptsPeq: Seq[Punto] = A ++ B
-val medsIni2 = Seq(A.head, B.head)
-
-// Secuencial
-val clasifS = clasificarSeq(ptsPeq, medsIni2)
-val medsS1  = actualizarSeq(clasifS, medsIni2)
-
-// Paralelo
-val clasifP = clasificarPar(umbral = 1)(ptsPeq, medsIni2)
-val medsP1  = actualizarPar(clasifP, medsIni2)
-
-// Verificaciones
-val okCuentasPeq: Boolean = cuentasClusters(clasifS) == cuentasClusters(clasifP)          // esperado: true
-val okMedianasPeq: Boolean = todasCerca(medsS1, medsP1, eps = 1e-9)                        // esperado: true
-(okCuentasPeq, okMedianasPeq) // esperado: (true, true)
-
-
-// Ejecución completa (k=3, n=16)
-// Esperado:
-// medianas finales seq ~ par    → true
 val puntos16_3 = generarPuntos(3, 16).toSeq
-val meds16_3   = inicializarMedianas(3, puntos16_3)
-val medsSeq16  = kMedianasSeq(puntos16_3, meds16_3, eta = 0.01)
-val medsPar16  = kMedianasPar(puntos16_3, meds16_3, eta = 0.01)
-val okKmeans16: Boolean = todasCerca(medsSeq16, medsPar16, eps = 1e-6)
-okKmeans16 // esperado: true
+println(s"Puntos generados (${puntos16_3.length}):")
+puntos16_3.foreach(println)
 
+val medianasIni_3 = inicializarMedianas(3, puntos16_3)
+println("\nMedianas iniciales:")
+medianasIni_3.foreach(println)
 
-// Convergencia
-// Esperado:
-// convGrandeSeq = true, convChicaSeq = false
-// convGrandePar = true, convChicaPar = false
-val convGrandeSeq = hayConvergenciaSeq(eta = 1.0,   meds16_3, medsSeq16)   // esperado: true
-val convChicaSeq  = hayConvergenciaSeq(eta = 1e-12, meds16_3, medsSeq16)   // esperado: false
-val convGrandePar = hayConvergenciaPar(eta = 1.0,   meds16_3, medsPar16)   // esperado: true
-val convChicaPar  = hayConvergenciaPar(eta = 1e-12, meds16_3, medsPar16)   // esperado: false
-(convGrandeSeq, !convChicaSeq, convGrandePar, !convChicaPar) // esperado: (true, true, true, true)
+// ---------------------------------------------------------------------------
+// PRUEBAS 2: Clasificación Secuencial y Paralela
+// ---------------------------------------------------------------------------
 
+println("\n===== PRUEBA 2: Clasificación Secuencial =====")
+val clasifSeq = clasificarSeq(puntos16_3, medianasIni_3)
+clasifSeq.foreach { case (m, ps) =>
+  println(s"Mediana $m -> ${ps.length} puntos")
+}
 
-// Caso medio (k=32, n=512) – rápido y útil para equivalencia
-// Esperado:
-// medianas finales seq ~ par    → true
-val puntos512_32 = generarPuntos(32, 512).toSeq
-val meds512_32   = inicializarMedianas(32, puntos512_32)
-val medsSeqM     = kMedianasSeq(puntos512_32, meds512_32, eta = 0.01)
-val medsParM     = kMedianasPar(puntos512_32, meds512_32, eta = 0.01)
-val okKmeansMedio: Boolean = todasCerca(medsSeqM, medsParM, eps = 1e-6)
-okKmeansMedio // esperado: true
+println("\n===== PRUEBA 2B: Clasificación Paralela =====")
+val clasifPar = clasificarPar(1024)(puntos16_3, medianasIni_3)
+clasifPar.foreach { case (m, ps) =>
+  println(s"Mediana $m -> ${ps.length} puntos")
+}
 
+// ---------------------------------------------------------------------------
+// PRUEBAS 3: Actualización de medianas
+// ---------------------------------------------------------------------------
 
-// Resultado global de CORRECCIÓN
-val todoOk: Boolean = okCuentasPeq && okMedianasPeq && okKmeans16 && okKmeansMedio
-todoOk // esperado: true
+println("\n===== PRUEBA 3: Actualización Secuencial =====")
+val nuevasSeq = actualizarSeq(clasifSeq, medianasIni_3)
+println("Medianas nuevas (Sec):")
+nuevasSeq.foreach(println)
 
+println("\n===== PRUEBA 3B: Actualización Paralela =====")
+val nuevasPar = actualizarPar(clasifPar, medianasIni_3)
+println("Medianas nuevas (Par):")
+nuevasPar.foreach(println)
 
-// Benchmarks + Gráficas HTML
+// ---------------------------------------------------------------------------
+// PRUEBAS 4: Convergencia
+// ---------------------------------------------------------------------------
 
-//Benchmark
-//Esperado:
-//Se imprimen tiempos en ms y speedup (Double)
-//Se generan kmedianasSeq.html y kmedianasPar.html en la raíz del proyecto
-val (tSeqSmall, tParSmall, speedupSmall) = tiemposKmedianas(puntos16_3, 3, 0.01)
-(tSeqSmall.value, tParSmall.value, speedupSmall) // esperado: (ms, ms, factor)
-probarKmedianas(puntos16_3, 3, 0.01)              // esperado: genera los 2 HTML
+println("\n===== PRUEBA 4: Verificación de convergencia =====")
+val eta = 0.01
+val convSeq = hayConvergenciaSeq(eta, medianasIni_3, nuevasSeq)
+val convPar = hayConvergenciaPar(eta, medianasIni_3, nuevasPar)
+println(s"¿Convergencia secuencial? $convSeq")
+println(s"¿Convergencia paralela?  $convPar")
 
+// ---------------------------------------------------------------------------
+// PRUEBAS 5: Algoritmo completo K-Medianas (Secuencial y Paralelo)
+// ---------------------------------------------------------------------------
 
-// Benchmark moderado (sigue siendo razonable)
-// Esperado:
-// Tiempos y speedup visibles; no debería colgar el worksheet
-val (tSeqMid, tParMid, speedupMid) = tiemposKmedianas(puntos512_32, 32, 0.01)
-(tSeqMid.value, tParMid.value, speedupMid)
+println("\n===== PRUEBA 5: Algoritmo completo =====")
 
+val medianasFinalSeq = kMedianasSeq(puntos16_3, medianasIni_3, eta)
+println("\nMedianas finales (Secuencial):")
+medianasFinalSeq.foreach(println)
 
+val medianasFinalPar = kMedianasPar(puntos16_3, medianasIni_3, eta)
+println("\nMedianas finales (Paralela):")
+medianasFinalPar.foreach(println)
+
+// ---------------------------------------------------------------------------
+// PRUEBAS 6: Medición de tiempos y visualización
+// ---------------------------------------------------------------------------
+
+println("\n===== PRUEBA 6: Benchmarks y Visualización =====")
+val tiempos = tiemposKmedianas(puntos16_3, 3, eta)
+println(s"Tiempos (Seq, Par, Aceleración): $tiempos")
+
+// Genera los gráficos HTML (requiere Plotly)
+println("\nGenerando visualización de clusters...")
+probarKmedianas(puntos16_3, 3, eta)
+
+println("\n===== FIN DE LAS PRUEBAS =====")

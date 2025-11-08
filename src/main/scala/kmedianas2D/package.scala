@@ -1,125 +1,191 @@
 package object kmedianas2D {
   import scala.annotation.tailrec
+  import scala.collection.{Map, Seq}
+  import scala.collection.parallel.CollectionConverters._
   import scala.util.Random
   import common._
 
-  // ===== Modelo =====
-  final case class Punto(x: Double, y: Double) {
-    private def sq(v: Double) = v * v
-    def distanciaAlCuadrado(that: Punto): Double = sq(that.x - x) + sq(that.y - y)
+  class Punto(val x: Double, val y: Double) {
+    private def cuadrado(v: Double): Double = v * v
+
+    def distanciaAlCuadrado(that: Punto): Double =
+      cuadrado(that.x - x) + cuadrado(that.y - y)
+
+    private def round(v: Double): Double = (v * 100).toInt / 100.0
+
+    override def toString = s"(${round(x)},${round(y)})"
   }
 
-  def umbral(n: Int): Int = {
-    val p = math.max(1, Runtime.getRuntime.availableProcessors())
-    math.max(4096, n / (p * 4))
-  }
-
-  private def chunk[A](xs: Seq[A], parts: Int): Seq[Seq[A]] = {
-    val n = math.max(1, parts)
-    val size = (xs.length.toDouble / n).ceil.toInt max 1
-    xs.grouped(size).toVector
-  }
-
-  // ===== Datos de prueba =====
   def generarPuntos(k: Int, num: Int): Seq[Punto] = {
-    val rx = new Random(3); val ry = new Random(11)
-    (0 until num).iterator.map { i =>
-      val x = ((i + 1) % k).toDouble / k + rx.nextDouble() * 0.5
-      val y = ((i + 5) % k).toDouble / k + ry.nextDouble() * 0.5
-      Punto(x, y)
-    }.toVector
+    val randx = new Random
+    val randy = new Random
+    (0 until num)
+      .map({ i =>
+        val x = (((i + 1) % k) * 1.0 / k + randx.nextDouble() * 0.5)
+        val y = (((i + 5) % k) * 1.0 / k + randy.nextDouble() * 0.5)
+        new Punto(x, y)
+      })
   }
 
-  def inicializarMedianas(k: Int, puntos: Seq[Punto]): Seq[Punto] =
-    new Random(7).shuffle(puntos).take(k).toVector
+  def inicializarMedianas(k: Int, puntos: Seq[Punto]): Seq[Punto] = {
+    val rand = new Random
+    (0 until k).map(_ => puntos(rand.nextInt(puntos.length)))
+  }
 
-  // ===== Clasificación =====
+  // Clasificar puntos
   def hallarPuntoMasCercano(p: Punto, medianas: Seq[Punto]): Punto = {
-    require(medianas.nonEmpty, "No hay medianas.")
-    medianas.minBy(m => p.distanciaAlCuadrado(m))
+    assert(medianas.nonEmpty)
+    medianas
+      .map(pto => (pto, p.distanciaAlCuadrado(pto)))
+      .sortWith((a, b) => (a._2 < b._2))
+      .head._1
+  }
+
+  // Versiones secuenciales
+
+  def calculePromedioSeq(medianaVieja: Punto, puntos: Seq[Punto]): Punto = {
+    if (puntos.isEmpty) medianaVieja
+    else {
+      new Punto(
+        puntos.map(p => p.x).sum / puntos.length,
+        puntos.map(p => p.y).sum / puntos.length
+      )
+    }
   }
 
   def clasificarSeq(puntos: Seq[Punto], medianas: Seq[Punto]): Map[Punto, Seq[Punto]] = {
-    val m = puntos.groupBy(p => hallarPuntoMasCercano(p, medianas))
-    val vacios = medianas.iterator.filterNot(m.contains).map(med => med -> Seq.empty[Punto])
-    m ++ vacios
+    // groupBy con la mediana más cercana
+    puntos.groupBy(p => hallarPuntoMasCercano(p, medianas))
   }
 
-  def clasificarPar(umbral: Int)(puntos: Seq[Punto], medianas: Seq[Punto]): Map[Punto, Seq[Punto]] = {
-    if (puntos.lengthCompare(umbral) <= 0) clasificarSeq(puntos, medianas)
-    else {
-      val pieces = chunk(puntos, Runtime.getRuntime.availableProcessors())
-      val tasks = pieces.map { part =>
-        task {
-          part.groupBy(p => hallarPuntoMasCercano(p, medianas)).view.mapValues(_.toVector).toMap
-        }
-      }
-      val merged = tasks.foldLeft(Map.empty[Punto, Seq[Punto]]) { (acc, t) =>
-        val mm = t.join()
-        mm.foldLeft(acc) { case (a, (k, vs)) => a.updated(k, a.getOrElse(k, Seq.empty) ++ vs) }
-      }
-      val vacios = medianas.iterator.filterNot(merged.contains).map(med => med -> Seq.empty[Punto])
-      merged ++ vacios
-    }
-  }
-
-  // ===== Promedios  =====
-
-  private def promedio(pts: Seq[Punto]): Option[Punto] =
-    if (pts.isEmpty) None
-    else {
-      val (sx, sy) = pts.foldLeft(0.0 -> 0.0) { case ((ax, ay), p) => (ax + p.x, ay + p.y) }
-      Some(Punto(sx / pts.length, sy / pts.length))
-    }
-
-  def calculePromedioSeq(medianaVieja: Punto, puntos: Seq[Punto]): Punto =
-    promedio(puntos).getOrElse(medianaVieja)
-
-  def calculePromedioPar(medianaVieja: Punto, puntos: Seq[Punto]): Punto =
-    promedio(puntos).getOrElse(medianaVieja)
-
-  def actualizarSeq(clasif: Map[Punto, Seq[Punto]], medianasViejas: Seq[Punto]): Seq[Punto] =
+  def actualizarSeq(clasif: Map[Punto, Seq[Punto]], medianasViejas: Seq[Punto]): Seq[Punto] = {
     medianasViejas.map(m => calculePromedioSeq(m, clasif.getOrElse(m, Seq.empty)))
-
-  def actualizarPar(clasif: Map[Punto, Seq[Punto]], medianasViejas: Seq[Punto]): Seq[Punto] = {
-    val pieces = chunk(medianasViejas.zipWithIndex, Runtime.getRuntime.availableProcessors())
-    val tasks = pieces.map { part =>
-      task { part.map { case (m, i) => i -> calculePromedioPar(m, clasif.getOrElse(m, Seq.empty)) } }
-    }
-    tasks.flatMap(_.join()).sortBy(_._1).map(_._2)
   }
 
-  // ===== Convergencia =====
-  def hayConvergenciaSeq(eta: Double, viejas: Seq[Punto], nuevas: Seq[Punto]): Boolean = {
-    val eta2 = eta * eta
-    viejas.iterator.zip(nuevas.iterator).forall { case (a, b) => a.distanciaAlCuadrado(b) <= eta2 }
+  @tailrec
+  def hayConvergenciaSeq(
+                          eta: Double,
+                          medianasViejas: Seq[Punto],
+                          medianasNuevas: Seq[Punto]
+                        ): Boolean = {
+    // Iterativo (tail-rec) sobre el índice
+    @tailrec
+    def loop(i: Int): Boolean =
+      if (i >= medianasViejas.length) true
+      else {
+        val d2 = medianasViejas(i).distanciaAlCuadrado(medianasNuevas(i))
+        if (d2 <= eta) loop(i + 1) else false
+      }
+    loop(0)
   }
 
-  def hayConvergenciaPar(eta: Double, viejas: Seq[Punto], nuevas: Seq[Punto]): Boolean = {
-    val eta2 = eta * eta
-    val idx = viejas.indices.toVector
-    val pieces = chunk(idx, Runtime.getRuntime.availableProcessors())
-    val tasks = pieces.map { part =>
-      task { part.forall(i => viejas(i).distanciaAlCuadrado(nuevas(i)) <= eta2) }
-    }
-    tasks.forall(_.join())
-  }
-
-  // ===== Algoritmo =====
   @tailrec
   final def kMedianasSeq(puntos: Seq[Punto], medianas: Seq[Punto], eta: Double): Seq[Punto] = {
-    val clasif = clasificarSeq(puntos, medianas)
+    val clasif  = clasificarSeq(puntos, medianas)
     val nuevas  = actualizarSeq(clasif, medianas)
-    if (hayConvergenciaSeq(eta, medianas, nuevas)) nuevas
-    else kMedianasSeq(puntos, nuevas, eta)
+    val listo   = hayConvergenciaSeq(eta, medianas, nuevas)
+    if (listo) nuevas else kMedianasSeq(puntos, nuevas, eta)
+  }
+
+  // Versiones paralelas
+
+  def calculePromedioPar(medianaVieja: Punto, puntos: Seq[Punto]): Punto = {
+    if (puntos.isEmpty) medianaVieja
+    else {
+      val puntosPar = puntos.par
+      new Punto(
+        puntosPar.map(p => p.x).sum / puntos.length,
+        puntosPar.map(p => p.y).sum / puntos.length
+      )
+    }
+  }
+
+  /***   HELPERS EXTRA (dejo documentados)
+   *
+   *  1) umbral(n: Int): Int
+   *     - Heurística simple para decidir cuándo conviene dividir/trabajar en paralelo.
+   *     - Se usa sólo por `clasificarPar` y `kMedianasPar`, acorde a Benchmark.
+   *
+   *  2) mergeClasifs(a, b)
+   *     - Fusión inmutable de dos Map[Punto, Seq[Punto]] concatenando las secuencias.
+   *
+   *  3) actualizarParRange / hayConvParRange
+   *     - Divide & conquer con paralelismo de tareas (common.parallel),
+   *       preservando el orden en la actualización y evaluando convergencia en paralelo.
+   */
+
+  private def umbral(n: Int): Int =
+    math.max(1024, n / 8)   // <- heurística conservadora
+
+  private def mergeClasifs(a: Map[Punto, Seq[Punto]], b: Map[Punto, Seq[Punto]]): Map[Punto, Seq[Punto]] = {
+    // Unir claves y concatenar listas de puntos (sin mutabilidad)
+    (a.keySet ++ b.keySet)
+      .toSeq
+      .map(k => k -> (a.getOrElse(k, Seq.empty) ++ b.getOrElse(k, Seq.empty)))
+      .toMap
+  }
+
+  def clasificarPar(umb: Int)(puntos: Seq[Punto], medianas: Seq[Punto]): Map[Punto, Seq[Punto]] = {
+    if (puntos.length <= umb) clasificarSeq(puntos, medianas)
+    else {
+      val (izq, der) = puntos.splitAt(puntos.length / 2)
+      val (m1, m2) = parallel(
+        clasificarPar(umb)(izq, medianas),
+        clasificarPar(umb)(der, medianas)
+      )
+      mergeClasifs(m1, m2)
+    }
+  }
+
+  def actualizarPar(clasif: Map[Punto, Seq[Punto]], medianasViejas: Seq[Punto]): Seq[Punto] = {
+
+    // divide & conquer para mantener orden con paralelismo de tareas
+    def actualizarParRange(ms: Seq[Punto]): Seq[Punto] =
+      if (ms.length <= 2) {
+        // tramo pequeño: secuencial y ordenado
+        ms.map(m => calculePromedioPar(m, clasif.getOrElse(m, Seq.empty)))
+      } else {
+        val (a, b) = ms.splitAt(ms.length / 2)
+        val (ra, rb) = parallel(
+          actualizarParRange(a),
+          actualizarParRange(b)
+        )
+        ra ++ rb
+      }
+
+    actualizarParRange(medianasViejas)
+  }
+
+  def hayConvergenciaPar(
+                          eta: Double,
+                          medianasViejas: Seq[Punto],
+                          medianasNuevas: Seq[Punto]
+                        ): Boolean = {
+
+    def hayConvParRange(vs: Seq[Punto], ns: Seq[Punto]): Boolean = {
+      if (vs.length <= 512) {
+        // tramo pequeño: check secuencial (inmutable)
+        vs.lazyZip(ns).forall((v, n) => v.distanciaAlCuadrado(n) <= eta)
+      } else {
+        val mid = vs.length / 2
+        val (vA, vB) = vs.splitAt(mid)
+        val (nA, nB) = ns.splitAt(mid)
+        val (okA, okB) = parallel(
+          hayConvParRange(vA, nA),
+          hayConvParRange(vB, nB)
+        )
+        okA && okB
+      }
+    }
+
+    hayConvParRange(medianasViejas, medianasNuevas)
   }
 
   @tailrec
   final def kMedianasPar(puntos: Seq[Punto], medianas: Seq[Punto], eta: Double): Seq[Punto] = {
-    val u = umbral(puntos.length)
-    val clasif = clasificarPar(u)(puntos, medianas)
+    val clasif  = clasificarPar(umbral(puntos.length))(puntos, medianas)
     val nuevas  = actualizarPar(clasif, medianas)
-    if (hayConvergenciaPar(eta, medianas, nuevas)) nuevas
-    else kMedianasPar(puntos, nuevas, eta)
+    val listo   = hayConvergenciaPar(eta, medianas, nuevas)
+    if (listo) nuevas else kMedianasPar(puntos, nuevas, eta)
   }
 }
