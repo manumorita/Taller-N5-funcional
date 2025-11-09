@@ -2,6 +2,112 @@ import Benchmark._
 import kmedianas2D._
 import scala.util.Random
 
+// ============================================================================
+// INFORME DE DESEMPEÑO: kMedianasSeq vs kMedianasPar
+// ============================================================================
+
+println("=" * 80)
+println("INFORME DE DESEMPEÑO: kMedianasSeq vs kMedianasPar")
+println("=" * 80)
+
+// ---------------------------------------------------------------------------
+// Función auxiliar para generar puntos con semilla fija
+// ---------------------------------------------------------------------------
+
+def generarPuntosConSeed(k: Int, num: Int, seed: Long): Seq[Punto] = {
+  val randx = new Random(seed)
+  val randy = new Random(seed + 1000)
+  (0 until num).map { i =>
+    val x = (((i + 1) % k) * 1.0 / k + randx.nextDouble() * 0.5)
+    val y = (((i + 5) % k) * 1.0 / k + randy.nextDouble() * 0.5)
+    new Punto(x, y)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Función para medir desempeño
+// ---------------------------------------------------------------------------
+
+def pruebaDesempeno(numPuntos: Int, numClusters: Int, eta: Double, seed: Long): Unit = {
+  println(s"\n--- Prueba: $numPuntos puntos, $numClusters clusters, eta=$eta (seed=$seed) ---")
+
+  val puntos = generarPuntosConSeed(numClusters, numPuntos, seed)
+  val medianas = inicializarMedianas(numClusters, puntos)
+
+  val (tSeq, tPar, aceleracion) = tiemposKmedianas(puntos, numClusters, eta)
+
+  println(f"Tiempo Secuencial: $tSeq%.4f")
+  println(f"Tiempo Paralelo:   $tPar%.4f")
+  println(f"Aceleración:       $aceleracion%.4f x")
+
+  // Verificar convergencia
+  val finalSeq = kMedianasSeq(puntos, medianas, eta)
+  val finalPar = kMedianasPar(puntos, medianas, eta)
+
+  val equivalentes = finalSeq.zip(finalPar).forall { case (s, p) =>
+    s.distanciaAlCuadrado(p) < 1e-6
+  }
+  println(s"¿Resultados equivalentes? $equivalentes")
+}
+
+// ============================================================================
+// BATERÍA 1: Escalamiento con número de puntos (k=8, eta=0.01)
+// ============================================================================
+println("\n" + "=" * 80)
+println("BATERÍA 1: Escalamiento con número de puntos (k=8, eta=0.01)")
+println("=" * 80)
+
+val tamanos1 = Seq(16, 64, 256, 1024, 4096, 16384, 65536)
+tamanos1.zipWithIndex.foreach { case (n, i) =>
+  pruebaDesempeno(n, 8, 0.01, seed = 1000L + i)
+}
+
+// ============================================================================
+// BATERÍA 2: Escalamiento con número de clusters (n=32768, eta=0.01)
+// ============================================================================
+println("\n" + "=" * 80)
+println("BATERÍA 2: Escalamiento con número de clusters (n=32768, eta=0.01)")
+println("=" * 80)
+
+val clusters2 = Seq(2, 4, 8, 16, 32, 64, 128, 256)
+clusters2.zipWithIndex.foreach { case (k, i) =>
+  pruebaDesempeno(32768, k, 0.01, seed = 2000L + i)
+}
+
+// ============================================================================
+// BATERÍA 3: Impacto de eta (n=16384, k=16)
+// ============================================================================
+println("\n" + "=" * 80)
+println("BATERÍA 3: Impacto del umbral eta (n=16384, k=16)")
+println("=" * 80)
+
+val etas3 = Seq(0.1, 0.01, 0.001)
+etas3.zipWithIndex.foreach { case (e, i) =>
+  pruebaDesempeno(16384, 16, e, seed = 3000L + i)
+}
+
+// ============================================================================
+// BATERÍA 4: Casos extremos
+// ============================================================================
+println("\n" + "=" * 80)
+println("BATERÍA 4: Casos extremos")
+println("=" * 80)
+
+println("\nCaso 4A: Pocos puntos, muchos clusters")
+pruebaDesempeno(256, 64, 0.01, seed = 4000L)
+
+println("\nCaso 4B: Muchos puntos, pocos clusters")
+pruebaDesempeno(262144, 4, 0.01, seed = 4001L)
+
+println("\nCaso 4C: Entrada masiva")
+pruebaDesempeno(1048576, 32, 0.01, seed = 4002L)
+
+println("\n" + "=" * 80)
+println("FIN DEL INFORME DE DESEMPEÑO")
+println("=" * 80)
+
+
+
 // ---------------------------------------------------------------------------
 // PRUEBAS 1: Generación de puntos y medianas iniciales
 // ---------------------------------------------------------------------------
@@ -84,4 +190,3 @@ println("\nGenerando visualización de clusters...")
 graficarKmedianas(puntos16_3, 3, eta)
 
 println("\n===== FIN DE LAS PRUEBAS =====")
-
