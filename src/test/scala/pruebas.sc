@@ -51,10 +51,10 @@ def pruebaDesempeno(numPuntos: Int, numClusters: Int, eta: Double, seed: Long): 
 }
 
 // ============================================================================
-// BATERÍA 1: Escalamiento con número de puntos (k=8, eta=0.01)
+// PRUEBA 1: Escalamiento con número de puntos (k=8, eta=0.01)
 // ============================================================================
 println("\n" + "=" * 80)
-println("BATERÍA 1: Escalamiento con número de puntos (k=8, eta=0.01)")
+println("PRUEBA 1: Escalamiento con número de puntos (k=8, eta=0.01)")
 println("=" * 80)
 
 val tamanos1 = Seq(16, 64, 256, 1024, 4096, 16384, 65536)
@@ -63,10 +63,10 @@ tamanos1.zipWithIndex.foreach { case (n, i) =>
 }
 
 // ============================================================================
-// BATERÍA 2: Escalamiento con número de clusters (n=32768, eta=0.01)
+// PRUEBA 2: Escalamiento con número de clusters (n=32768, eta=0.01)
 // ============================================================================
 println("\n" + "=" * 80)
-println("BATERÍA 2: Escalamiento con número de clusters (n=32768, eta=0.01)")
+println("PRUEBA 2: Escalamiento con número de clusters (n=32768, eta=0.01)")
 println("=" * 80)
 
 val clusters2 = Seq(2, 4, 8, 16, 32, 64, 128, 256)
@@ -75,10 +75,10 @@ clusters2.zipWithIndex.foreach { case (k, i) =>
 }
 
 // ============================================================================
-// BATERÍA 3: Impacto de eta (n=16384, k=16)
+// PRUEBA 3: Impacto de eta (n=16384, k=16)
 // ============================================================================
 println("\n" + "=" * 80)
-println("BATERÍA 3: Impacto del umbral eta (n=16384, k=16)")
+println("PRUEBA 3: Impacto del umbral eta (n=16384, k=16)")
 println("=" * 80)
 
 val etas3 = Seq(0.1, 0.01, 0.001)
@@ -87,10 +87,10 @@ etas3.zipWithIndex.foreach { case (e, i) =>
 }
 
 // ============================================================================
-// BATERÍA 4: Casos extremos
+// PRUEBA 4: Casos extremos
 // ============================================================================
 println("\n" + "=" * 80)
-println("BATERÍA 4: Casos extremos")
+println("PRUEBA 4: Casos extremos")
 println("=" * 80)
 
 println("\nCaso 4A: Pocos puntos, muchos clusters")
