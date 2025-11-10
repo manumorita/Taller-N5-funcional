@@ -36,8 +36,8 @@ def pruebaDesempeno(numPuntos: Int, numClusters: Int, eta: Double, seed: Long): 
 
   val (tSeq, tPar, aceleracion) = tiemposKmedianas(puntos, numClusters, eta)
 
-  println(f"Tiempo Secuencial: $tSeq%.4f")
-  println(f"Tiempo Paralelo:   $tPar%.4f")
+  println(f"Tiempo Secuencial: ${tSeq.value}%.4f")
+  println(f"Tiempo Paralelo:   ${tPar.value}%.4f")
   println(f"Aceleración:       $aceleracion%.4f x")
 
   // Verificar convergencia
@@ -101,6 +101,32 @@ pruebaDesempeno(262144, 4, 0.01, seed = 4001L)
 
 println("\nCaso 4C: Entrada masiva")
 pruebaDesempeno(1048576, 32, 0.01, seed = 4002L)
+
+// ============================================================================
+// GENERACIÓN DE GRÁFICAS (Casos ligeros para visualización)
+// ============================================================================
+
+println("\n" + "=" * 80)
+println("GENERACIÓN DE GRÁFICAS")
+println("=" * 80)
+
+// Gráfica 1: Caso pequeño (para ver clusters claramente)
+println("\n--- Gráfica 1: Caso pequeño (256 puntos, 4 clusters) ---")
+val puntos_grafica1 = generarPuntosConSeed(4, 256, 5000L)
+probarKmedianas(puntos_grafica1, 4, 0.01)
+println("Archivos generados: kmedianasSeq.html y kmedianasPar.html")
+
+// Gráfica 2: Caso medio (para análisis de desempeño)
+println("\n--- Gráfica 2: Caso medio (1024 puntos, 8 clusters) ---")
+val puntos_grafica2 = generarPuntosConSeed(8, 1024, 5001L)
+probarKmedianas(puntos_grafica2, 8, 0.01)
+println("Archivos generados: kmedianasSeq.html y kmedianasPar.html")
+
+// Gráfica 3: Caso grande (pero manejable)
+println("\n--- Gráfica 3: Caso grande (4096 puntos, 16 clusters) ---")
+val puntos_grafica3 = generarPuntosConSeed(16, 4096, 5002L)
+probarKmedianas(puntos_grafica3, 16, 0.01)
+println("Archivos generados: kmedianasSeq.html y kmedianasPar.html")
 
 println("\n" + "=" * 80)
 println("FIN DEL INFORME DE DESEMPEÑO")
@@ -182,11 +208,14 @@ medianasFinalPar.foreach(println)
 // ---------------------------------------------------------------------------
 
 println("\n===== PRUEBA 6: Benchmarks y Visualización =====")
-val tiempos = tiemposKmedianas(puntos16_3, 3, eta)
-println(s"Tiempos (ms) -> Seq: ${tiempos._1}  Par: ${tiempos._2}  Aceleración: ${tiempos._3}")
+val puntos_viz = generarPuntos(3, 16).toSeq
 
-println("\nGenerando visualización de clusters...")
-// si el worksheet se cuelga al graficar, comenta esta línea y ejecútala luego en `sbt run`
-graficarKmedianas(puntos16_3, 3, eta)
+// Midiendo tiempos
+tiemposKmedianas(puntos_viz, 3, 0.01)
+
+println(s"Directorio actual: ${System.getProperty("user.dir")}")
+
+// Visualizando Clusters
+probarKmedianas(puntos_viz, 3, 0.01)
 
 println("\n===== FIN DE LAS PRUEBAS =====")
